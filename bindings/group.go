@@ -22,61 +22,112 @@ import (
 )
 
 ////////////////////////////////////////////////////////////////////////////////
-// Group Chat Singleton Tracker                                               //
+// Group Singleton Tracker                                                    //
 ////////////////////////////////////////////////////////////////////////////////
 
-// groupChatTrackerSingleton is used to track GroupChat objects so that they can be
+// groupTrackerSingleton is used to track Group objects so that they can be
 // referenced by ID back over the bindings.
-var groupChatTrackerSingleton = &groupChatTracker{
-	tracked: make(map[int]*GroupChat),
+var groupTrackerSingleton = &groupTracker{
+	tracked: make(map[int]*Group),
 	count:   0,
 }
 
-// groupChatTracker is a singleton used to keep track of extant GroupChat objects,
+// groupTracker is a singleton used to keep track of extant Group objects,
 // preventing race conditions created by passing it over the bindings.
-type groupChatTracker struct {
-	tracked map[int]*GroupChat
+type groupTracker struct {
+	tracked map[int]*Group
 	count   int
 	mux     sync.RWMutex
 }
 
-// make create a GroupChat from a groupChat.Wrapper, assigns it a unique ID, and
-// adds it to the groupChatTracker.
-func (ut *groupChatTracker) make(gcInt gc.GroupChat) *GroupChat {
+// make create a Group from a groupStore.Group, assigns it a unique ID, and
+// adds it to the groupTracker.
+func (ut *groupTracker) make(g gs.Group) *Group {
 	ut.mux.Lock()
 	defer ut.mux.Unlock()
 
 	id := ut.count
 	ut.count++
 
-	ut.tracked[id] = &GroupChat{
-		m:  gc.NewWrapper(gcInt),
+	ut.tracked[id] = &Group{
+		g:  g,
 		id: id,
 	}
 
 	return ut.tracked[id]
 }
 
-// get an GroupChat from the groupChatTracker given its ID.
-func (ut *groupChatTracker) get(id int) (*GroupChat, error) {
+// get an GroupChat from the groupTracker given its ID.
+func (ut *groupTracker) get(id int) (*Group, error) {
 	ut.mux.RLock()
 	defer ut.mux.RUnlock()
 
 	c, exist := ut.tracked[id]
 	if !exist {
 		return nil, errors.Errorf(
-			"Cannot get GroupChat for ID %d, does not exist", id)
+			"Cannot get Group for ID %d, does not exist", id)
 	}
 
 	return c, nil
 }
 
-// delete removes a GroupChat from the groupChatTracker.
-func (ut *groupChatTracker) delete(id int) {
+// delete removes a GroupChat from the groupTracker.
+func (ut *groupTracker) delete(id int) {
 	ut.mux.Lock()
 	defer ut.mux.Unlock()
 
 	delete(ut.tracked, id)
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+// Callbacks
+//////////////////////////////////////////////////////////////////////////////////
+
+// GroupRequest is a bindings-layer interface that handles a group reception.
+//
+// Parameters:
+//  - trackedGroupId - the ID to retrieve the Group object within the backend's
+//                     tracking system.
+type GroupRequest interface {
+	Callback(trackedGroupId int)
+}
+
+// GroupChatProcessor manages the handling of received group chat messages.
+type GroupChatProcessor interface {
+	Process(decryptedMessage, msg, receptionId []byte, ephemeralId,
+		roundId int64, err error)
+	fmt.Stringer
+}
+
+// groupChatProcessor implements GroupChatProcessor as a way of obtaining a
+// groupChat.Processor over the bindings.
+type groupChatProcessor struct {
+	bindingsCb GroupChatProcessor
+}
+
+// convertProcessor turns the input of a groupChat.Processor to the
+// binding-layer primitives equivalents within the GroupChatProcessor.Process.
+func convertGroupChatProcessor(decryptedMsg gc.MessageReceive, msg format.Message,
+	receptionID receptionID.EphemeralIdentity, round rounds.Round) (
+	decryptedMessage, message, receptionId []byte, ephemeralId, roundId int64, err error) {
+
+	decryptedMessage, err = json.Marshal(decryptedMsg)
+	message = msg.Marshal()
+	receptionId = receptionID.Source.Marshal()
+	ephemeralId = receptionID.EphId.Int64()
+	roundId = int64(round.ID)
+	return
+}
+
+// Process handles incoming group chat messages.
+func (gcp *groupChatProcessor) Process(decryptedMsg gc.MessageReceive, msg format.Message,
+	receptionID receptionID.EphemeralIdentity, round rounds.Round) {
+	gcp.bindingsCb.Process(convertGroupChatProcessor(decryptedMsg, msg, receptionID, round))
+}
+
+// String prints a name for debugging.
+func (gcp *groupChatProcessor) String() string {
+	return gcp.bindingsCb.String()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -85,33 +136,18 @@ func (ut *groupChatTracker) delete(id int) {
 
 // GroupChat is a binding-layer group chat manager.
 type GroupChat struct {
-	m  *gc.Wrapper
-	id int
-}
-
-// GroupRequest is a bindings-layer interface that handles a group reception.
-//
-// Parameters:
-//  - payload - a byte serialized representation of a group.
-type GroupRequest interface {
-	Callback(payload Group)
+	m *gc.Wrapper
 }
 
 // LoadOrNewGroupChat creates a bindings-layer group chat manager.
 //
 // Parameters:
 //  - e2eID - e2e object ID in the tracker.
-//  - groupID - GroupChat object ID in the tracker, given from previous call
-//    to LoadOrNewGroupChat.
-//  - requestFunc - a callback to handle group chat requests.
-//  - processor - the group chat message processor.
-func LoadOrNewGroupChat(e2eID, groupID int, requestFunc GroupRequest,
-	processor GroupChatProcessor) (*GroupChat, error) {
-	// Retrieve from singleton
-	groupChat, err := groupChatTrackerSingleton.get(groupID)
-	if err == nil { // If present, return group chat manager from singleton
-		return groupChat, nil
-	}
+//  - requestFunc - a GroupRequest object which has a callback to handle
+//    group chat requests.
+//  - processor - a GroupChatProcessor which will represent the group chat message processor.
+func LoadOrNewGroupChat(e2eID int,
+	requestFunc GroupRequest, processor GroupChatProcessor) (*GroupChat, error) {
 
 	// Get user from singleton
 	user, err := e2eTrackerSingleton.get(e2eID)
@@ -121,12 +157,9 @@ func LoadOrNewGroupChat(e2eID, groupID int, requestFunc GroupRequest,
 
 	// Construct a wrapper for the request callback
 	requestCb := func(g gs.Group) {
-		//fixme: review this to see if should be json marshaled.
-		// At the moment, groupStore.DhKeyList is an unsupported
-		// type, it would need a MarshalJson method. If we JSON marshal, change
-		// JoinGroup implementation and docstring accordingly.
-		// As for now, it's matching the construction as defined pre-restructure.
-		requestFunc.Callback(Group{g: g})
+		// Add to tracker and pass tracker ID through callback.
+		groupTrackedId := groupTrackerSingleton.make(g).GetTrackedID()
+		requestFunc.Callback(groupTrackedId)
 	}
 
 	// Construct a group chat manager
@@ -136,13 +169,8 @@ func LoadOrNewGroupChat(e2eID, groupID int, requestFunc GroupRequest,
 		return nil, err
 	}
 
-	// Construct wrapper
-	return groupChatTrackerSingleton.make(gcInt), nil
-}
-
-// GetID returns the groupChatTracker ID for the GroupChat object.
-func (g *GroupChat) GetID() int {
-	return g.id
+	// Construct wrapper and return
+	return &GroupChat{m: gc.NewWrapper(gcInt)}, nil
 }
 
 // MakeGroup creates a new Group and sends a group request to all members in the
@@ -172,49 +200,46 @@ func (g *GroupChat) MakeGroup(membership IdList, message, name []byte) (
 		return nil, err
 	}
 
+	// Add to tracker
+	trackerId := groupTrackerSingleton.make(grp).GetTrackedID()
+
 	// Construct the group report
 	report := GroupReport{
-		Id:     grp.ID.Bytes(),
-		Rounds: makeRoundsList(rounds).Rounds,
-		Status: int(status),
+		TrackedId: trackerId,
+		Id:        grp.ID.Bytes(),
+		Rounds:    makeRoundsList(rounds).Rounds,
+		Status:    int(status),
 	}
 
-	// Marshal the report
+	// Marshal the report and return
 	return json.Marshal(report)
 }
 
 // ResendRequest resends a group request to all members in the group.
 //
 // Parameters:
-//  - groupId - a byte representation of a group's ID.
-//    This can be found in the report returned by GroupChat.MakeGroup.
+//  - trackedGroupId - The ID to retrieve the Group object within the
+//    backend's tracking system. This should be the value GroupReport
+//    returned by GroupChat.MakeGroup.
 //
 // Returns:
 //  - []byte - a JSON-marshalled GroupReport.
-func (g *GroupChat) ResendRequest(groupId []byte) ([]byte, error) {
-
-	// Unmarshal the group ID
-	groupID, err := id.Unmarshal(groupId)
+func (g *GroupChat) ResendRequest(trackedGroupId int) ([]byte, error) {
+	// Get group from tracker
+	grp, err := groupTrackerSingleton.get(trackedGroupId)
 	if err != nil {
-		return nil,
-			errors.Errorf("Failed to unmarshal group ID: %+v", err)
-	}
-
-	// Retrieve group from manager
-	grp, exists := g.m.GetGroup(groupID)
-	if !exists {
-		return nil, errors.Errorf("Failed to find group %s", groupID)
+		return nil, err
 	}
 
 	// Resend request
-	rnds, status, err := g.m.ResendRequest(groupID)
+	rnds, status, err := g.m.ResendRequest(grp.g.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Construct the group report on resent request
 	report := &GroupReport{
-		Id:     grp.ID.Bytes(),
+		Id:     grp.g.ID.Bytes(),
 		Rounds: makeRoundsList(rnds).Rounds,
 		Status: int(status),
 	}
@@ -226,23 +251,49 @@ func (g *GroupChat) ResendRequest(groupId []byte) ([]byte, error) {
 // JoinGroup allows a user to join a group when a request is received.
 //
 // Parameters:
-//  - group - a bindings-level Group object. This is received by GroupRequest.Callback.
-func (g *GroupChat) JoinGroup(group Group) error {
-	return g.m.JoinGroup(group.g)
+//  - trackedGroupId - The ID to retrieve the Group object within the backend's
+//                     tracking system. This is received by GroupRequest.Callback.
+func (g *GroupChat) JoinGroup(trackedGroupId int) error {
+
+	// Retrieve group from singleton
+	grp, err := groupTrackerSingleton.get(trackedGroupId)
+	if err != nil {
+		return err
+	}
+
+	// Join group
+	err = g.m.JoinGroup(grp.g)
+	if err != nil {
+		// Remove from tracker if we could not join the group
+		groupTrackerSingleton.delete(trackedGroupId)
+		return err
+	}
+
+	return nil
 }
 
 // LeaveGroup deletes a group so a user no longer has access.
 //
 // Parameters:
-//  - groupId - the byte data representing a group ID.
-//    This can be pulled from a marshalled GroupReport.
-func (g *GroupChat) LeaveGroup(groupId []byte) error {
-	grpId, err := id.Unmarshal(groupId)
+//  - trackedGroupId - The ID to retrieve the Group object within the backend's
+//                     tracking system.
+func (g *GroupChat) LeaveGroup(trackedGroupId int) error {
+	// Retrieve group from singleton
+	grp, err := groupTrackerSingleton.get(trackedGroupId)
 	if err != nil {
-		return errors.Errorf("Failed to unmarshal group ID: %+v", err)
+		return err
 	}
 
-	return g.m.LeaveGroup(grpId)
+	// Leave group
+	err = g.m.LeaveGroup(grp.g.ID)
+	if err != nil {
+		return err
+	}
+
+	// Remove group from singleton
+	groupTrackerSingleton.delete(trackedGroupId)
+
+	return nil
 }
 
 // Send is the bindings-level function for sending to a group.
@@ -284,7 +335,6 @@ func (g *GroupChat) Send(groupId,
 //  - []byte - a JSON marshalled IdList representing all group ID's.
 func (g *GroupChat) GetGroups() ([]byte, error) {
 	groupIds := makeIdList(g.m.GetGroups())
-
 	return json.Marshal(groupIds)
 }
 
@@ -322,7 +372,13 @@ func (g *GroupChat) NumGroups() int {
 // Group structure contains the identifying and membership information of a
 // group chat.
 type Group struct {
-	g gs.Group
+	g  gs.Group
+	id int
+}
+
+// GetTrackedID returns the groupTracker ID for the Group object.
+func (g *Group) GetTrackedID() int {
+	return g.id
 }
 
 // GetName returns the name set by the user for the group.
@@ -368,48 +424,6 @@ func (g *Group) Serialize() []byte {
 	return g.g.Serialize()
 }
 
-//////////////////////////////////////////////////////////////////////////////////
-// Group Chat Processor
-//////////////////////////////////////////////////////////////////////////////////
-
-// GroupChatProcessor manages the handling of received group chat messages.
-type GroupChatProcessor interface {
-	Process(decryptedMessage, msg, receptionId []byte, ephemeralId,
-		roundId int64, err error)
-	fmt.Stringer
-}
-
-// groupChatProcessor implements GroupChatProcessor as a way of obtaining a
-// groupChat.Processor over the bindings.
-type groupChatProcessor struct {
-	bindingsCb GroupChatProcessor
-}
-
-// convertProcessor turns the input of a groupChat.Processor to the
-// binding-layer primitives equivalents within the GroupChatProcessor.Process.
-func convertGroupChatProcessor(decryptedMsg gc.MessageReceive, msg format.Message,
-	receptionID receptionID.EphemeralIdentity, round rounds.Round) (
-	decryptedMessage, message, receptionId []byte, ephemeralId, roundId int64, err error) {
-
-	decryptedMessage, err = json.Marshal(decryptedMsg)
-	message = msg.Marshal()
-	receptionId = receptionID.Source.Marshal()
-	ephemeralId = receptionID.EphId.Int64()
-	roundId = int64(round.ID)
-	return
-}
-
-// Process handles incoming group chat messages.
-func (gcp *groupChatProcessor) Process(decryptedMsg gc.MessageReceive, msg format.Message,
-	receptionID receptionID.EphemeralIdentity, round rounds.Round) {
-	gcp.bindingsCb.Process(convertGroupChatProcessor(decryptedMsg, msg, receptionID, round))
-}
-
-// String prints a name for debugging.
-func (gcp *groupChatProcessor) String() string {
-	return gcp.bindingsCb.String()
-}
-
 /////////////////////////////////////////////////////////////////////////////////
 // Report Structures
 ////////////////////////////////////////////////////////////////////////////////
@@ -417,10 +431,17 @@ func (gcp *groupChatProcessor) String() string {
 // GroupReport is returned when creating a new group and contains the ID of
 // the group, a list of rounds that the group requests were sent on, and the
 // status of the send operation.
+//
+// Fields:
+//  - TrackedId - the ID to retrieve the Group object within the backend's tracking system.
+//  - ID - the id.ID for the group.
+//  - Rounds - the marshalled RoundsList that the initial group message was sent on.
+//  - Status - the status of the sent requests.
 type GroupReport struct {
-	Id     []byte
-	Rounds []int
-	Status int
+	TrackedId int
+	Id        []byte
+	Rounds    []int
+	Status    int
 }
 
 // GroupSendReport is returned when sending a group message. It contains the
