@@ -46,13 +46,12 @@ func unmarshalRoundsList(marshaled []byte) ([]id.Round, error) {
 	}
 
 	return realRl, nil
-
 }
 
-func makeRoundsList(rounds []id.Round) RoundsList {
-	rl := RoundsList{}
-	for _, rid := range rounds {
-		rl.Rounds = append(rl.Rounds, int(rid))
+func makeRoundsList(rounds ...id.Round) RoundsList {
+	rl := RoundsList{make([]int, len(rounds))}
+	for i, rid := range rounds {
+		rl.Rounds[i] = int(rid)
 	}
 	return rl
 }
@@ -81,7 +80,7 @@ type MessageDeliveryCallback interface {
 // the same pointer.
 func (c *Cmix) WaitForMessageDelivery(
 	roundList []byte, mdc MessageDeliveryCallback, timeoutMS int) error {
-	jww.INFO.Printf("WaitForMessageDelivery(%v, _, %v)", roundList, timeoutMS)
+	jww.INFO.Printf("WaitForMessageDelivery(%s, _, %d)", roundList, timeoutMS)
 	rl, err := unmarshalRoundsList(roundList)
 	if err != nil {
 		return errors.Errorf("Failed to WaitForMessageDelivery callback due "+
