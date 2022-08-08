@@ -82,7 +82,7 @@ type MessageDeliveryCallback interface {
 // the same pointer.
 //
 // roundList is a JSON marshalled RoundsList or any JSON marshalled send report
-// that has a RoundsList object in it.
+// that inherits a RoundsList object.
 func (c *Cmix) WaitForMessageDelivery(
 	roundList []byte, mdc MessageDeliveryCallback, timeoutMS int) error {
 	jww.INFO.Printf("WaitForMessageDelivery(%s, _, %d)", roundList, timeoutMS)
