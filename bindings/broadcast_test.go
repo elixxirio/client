@@ -56,7 +56,7 @@ func TestBroadcastReport_JSON(t *testing.T) {
 		t.Errorf("Failed to form ephemeral ID: %+v", err)
 	}
 	br := BroadcastReport{
-		RoundsList: RoundsList{},
+		RoundsList: makeRoundsList(42),
 		EphID:      eid,
 	}
 
