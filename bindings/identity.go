@@ -123,67 +123,41 @@ func GetPubkeyFromContact(marshaled []byte) ([]byte, error) {
 // Fact Functions                                                             //
 ////////////////////////////////////////////////////////////////////////////////
 
-// Fact is an internal fact type for use in the bindings layer.
-//
-// JSON example:
-//  {
-//   "Fact": "Zezima",
-//   "Type": 0
-//  }
-type Fact struct {
-	Fact string
-	Type int
-}
-
 // SetFactsOnContact replaces the facts on the contact with the passed in facts
 // pass in empty facts in order to clear the facts.
 //
 // Parameters:
-//  - marshaled - JSON marshalled contact.Contact object
-//  - facts - JSON marshalled Fact object.
-func SetFactsOnContact(marshaled []byte, facts []byte) ([]byte, error) {
+//  - marshaled - the JSON marshalled by of contact.Contact object.
+//  - factListJSON - the JSON marshalled bytes of fact.FactList.
+func SetFactsOnContact(marshaled []byte, factListJSON []byte) ([]byte, error) {
 	cnt, err := contact.Unmarshal(marshaled)
 	if err != nil {
 		return nil, err
 	}
 
-	factsList := make([]Fact, 0)
-	err = json.Unmarshal(facts, &factsList)
+	var factsList fact.FactList
+	err = json.Unmarshal(factListJSON, &factsList)
 	if err != nil {
 		return nil, err
 	}
 
-	realFactList := make(fact.FactList, 0, len(factsList))
-	for i := range factsList {
-		realFactList = append(realFactList, fact.Fact{
-			Fact: factsList[i].Fact,
-			T:    fact.FactType(factsList[i].Type),
-		})
-	}
+	cnt.Facts = factsList
 
-	cnt.Facts = realFactList
 	return cnt.Marshal(), nil
 }
 
-// GetFactsFromContact accepts a marshalled contact.Contact object and returns
-// its marshalled list of Fact objects.
+// GetFactsFromContact returns the fact list in the contact.Contact object.
+//
+// Parameters:
+//  - marshaled - the JSON marshalled by of contact.Contact object.
+//
+// Returns:
+//  - []byte - the JSON marshalled bytes of fact.FactList.
 func GetFactsFromContact(marshaled []byte) ([]byte, error) {
 	cnt, err := contact.Unmarshal(marshaled)
 	if err != nil {
 		return nil, err
 	}
 
-	factsList := make([]Fact, len(cnt.Facts))
-	for i := range cnt.Facts {
-		factsList = append(factsList, Fact{
-			Fact: cnt.Facts[i].Fact,
-			Type: int(cnt.Facts[i].T),
-		})
-	}
-
-	factsListMarshaled, err := json.Marshal(&factsList)
-	if err != nil {
-		return nil, err
-	}
-	return factsListMarshaled, nil
+	return json.Marshal(&cnt.Facts)
 }

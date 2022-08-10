@@ -277,7 +277,7 @@ func (ud *UserDiscovery) PermanentDeleteAccount(factJson []byte) error {
 // passed in is not UD service does not associate this fact with this user.
 //
 // Parameters:
-//  - factJson - a JSON marshalled fact.Fact
+//  - factJson - a JSON marshalled [fact.Fact]
 func (ud *UserDiscovery) RemoveFact(factJson []byte) error {
 	var f fact.Fact
 	err := json.Unmarshal(factJson, &f)
