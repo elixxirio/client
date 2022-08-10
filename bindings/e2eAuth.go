@@ -35,7 +35,7 @@ import (
 //
 // Parameters:
 //  - partnerContact - the marshalled bytes of the contact.Contact object.
-//  - factsListJson - the JSON marshalled bytes of fact.FactList.
+//  - factsListJson - the JSON marshalled bytes of [fact.FactList].
 //
 // Returns:
 //  - int64 - ID of the round (convert to uint64)

@@ -128,7 +128,7 @@ func GetPubkeyFromContact(marshaled []byte) ([]byte, error) {
 //
 // Parameters:
 //  - marshaled - the JSON marshalled by of contact.Contact object.
-//  - factListJSON - the JSON marshalled bytes of fact.FactList.
+//  - factListJSON - the JSON marshalled bytes of [fact.FactList].
 func SetFactsOnContact(marshaled []byte, factListJSON []byte) ([]byte, error) {
 	cnt, err := contact.Unmarshal(marshaled)
 	if err != nil {
@@ -152,7 +152,7 @@ func SetFactsOnContact(marshaled []byte, factListJSON []byte) ([]byte, error) {
 //  - marshaled - the JSON marshalled by of contact.Contact object.
 //
 // Returns:
-//  - []byte - the JSON marshalled bytes of fact.FactList.
+//  - []byte - the JSON marshalled bytes of [fact.FactList].
 func GetFactsFromContact(marshaled []byte) ([]byte, error) {
 	cnt, err := contact.Unmarshal(marshaled)
 	if err != nil {
