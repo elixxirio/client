@@ -99,8 +99,8 @@ func (c *Cmix) GetReceptionRegistrationValidationSignature() []byte {
 
 // GetIDFromContact accepts a marshalled contact.Contact object and returns a
 // marshalled id.ID object.
-func GetIDFromContact(marshaled []byte) ([]byte, error) {
-	cnt, err := contact.Unmarshal(marshaled)
+func GetIDFromContact(marshaledContact []byte) ([]byte, error) {
+	cnt, err := contact.Unmarshal(marshaledContact)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +110,8 @@ func GetIDFromContact(marshaled []byte) ([]byte, error) {
 
 // GetPubkeyFromContact accepts a marshalled contact.Contact object and returns
 // a JSON marshalled large.Int DH public key.
-func GetPubkeyFromContact(marshaled []byte) ([]byte, error) {
-	cnt, err := contact.Unmarshal(marshaled)
+func GetPubkeyFromContact(marshaledContact []byte) ([]byte, error) {
+	cnt, err := contact.Unmarshal(marshaledContact)
 	if err != nil {
 		return nil, err
 	}
@@ -127,10 +127,10 @@ func GetPubkeyFromContact(marshaled []byte) ([]byte, error) {
 // pass in empty facts in order to clear the facts.
 //
 // Parameters:
-//  - marshaled - the JSON marshalled by of contact.Contact object.
+//  - marshaledContact - the JSON marshalled bytes of contact.Contact object.
 //  - factListJSON - the JSON marshalled bytes of [fact.FactList].
-func SetFactsOnContact(marshaled []byte, factListJSON []byte) ([]byte, error) {
-	cnt, err := contact.Unmarshal(marshaled)
+func SetFactsOnContact(marshaledContact []byte, factListJSON []byte) ([]byte, error) {
+	cnt, err := contact.Unmarshal(marshaledContact)
 	if err != nil {
 		return nil, err
 	}
@@ -149,12 +149,12 @@ func SetFactsOnContact(marshaled []byte, factListJSON []byte) ([]byte, error) {
 // GetFactsFromContact returns the fact list in the contact.Contact object.
 //
 // Parameters:
-//  - marshaled - the JSON marshalled by of contact.Contact object.
+//  - marshaledContact - the JSON marshalled bytes by of contact.Contact object.
 //
 // Returns:
 //  - []byte - the JSON marshalled bytes of [fact.FactList].
-func GetFactsFromContact(marshaled []byte) ([]byte, error) {
-	cnt, err := contact.Unmarshal(marshaled)
+func GetFactsFromContact(marshaledContact []byte) ([]byte, error) {
+	cnt, err := contact.Unmarshal(marshaledContact)
 	if err != nil {
 		return nil, err
 	}
