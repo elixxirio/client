@@ -6,7 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 // Package dummy allows for the sending of dummy messages to dummy recipients
-// via SendCmix at randomly generated intervals.
+// via SendCmix at randomly generated intervals. Test
 
 package dummy
 
