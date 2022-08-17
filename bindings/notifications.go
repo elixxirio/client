@@ -7,6 +7,8 @@
 
 package bindings
 
+// FIXME: This is the old NotificationsForMe code that needs to be fixed
+/*
 type NotificationForMeReport struct {
 	ForMe  bool
 	Type   string
@@ -30,42 +32,42 @@ type ManyNotificationForMeReport struct {
 //	"group"		group ID			reception of a group chat message
 //  "endFT"     sender user ID		Last message sent confirming end of file transfer
 //  "groupRQ"   sender user ID		Request from sender to join a group chat
-// func NotificationsForMe(notifCSV, preimages string) (*ManyNotificationForMeReport, error) {
-// 	// Handle deserialization of preimages
-// 	var preimageList []edge.Preimage
-// 	if err := json.Unmarshal([]byte(preimages), &preimageList); err != nil {
-// 		return nil, errors.WithMessagef(err, "Failed to unmarshal the " +
-// 			"preimages list, cannot check if notification is for me")
-// 	}
-//
-// 	list, err := notifications.DecodeNotificationsCSV(notifCSV)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	notifList := make([]*NotificationForMeReport, len(list))
-//
-// 	for i, notifData := range list {
-// 		notifList[i] = &NotificationForMeReport{
-// 			ForMe:  false,
-// 			Type:   "",
-// 			Source: nil,
-// 		}
-// 		// check if any preimages match with the passed in data
-// 		for _, preimage := range preimageList {
-// 			if fingerprint.CheckIdentityFpFromMessageHash(notifData.IdentityFP, notifData.MessageHash, preimage.Data) {
-// 				notifList[i] = &NotificationForMeReport{
-// 					ForMe:  true,
-// 					Type:   preimage.Type,
-// 					Source: preimage.Source,
-// 				}
-// 				break
-// 			}
-// 		}
-// 	}
-//
-// 	return &ManyNotificationForMeReport{notifList}, nil
-// }
+func NotificationsForMe(notifCSV, preimages string) (*ManyNotificationForMeReport, error) {
+	// Handle deserialization of preimages
+	var preimageList []edge.Preimage
+	if err := json.Unmarshal([]byte(preimages), &preimageList); err != nil {
+		return nil, errors.WithMessagef(err, "Failed to unmarshal the " +
+			"preimages list, cannot check if notification is for me")
+	}
+
+	list, err := notifications.DecodeNotificationsCSV(notifCSV)
+	if err != nil {
+		return nil, err
+	}
+
+	notifList := make([]*NotificationForMeReport, len(list))
+
+	for i, notifData := range list {
+		notifList[i] = &NotificationForMeReport{
+			ForMe:  false,
+			Type:   "",
+			Source: nil,
+		}
+		// check if any preimages match with the passed in data
+		for _, preimage := range preimageList {
+			if fingerprint.CheckIdentityFpFromMessageHash(notifData.IdentityFP, notifData.MessageHash, preimage.Data) {
+				notifList[i] = &NotificationForMeReport{
+					ForMe:  true,
+					Type:   preimage.Type,
+					Source: preimage.Source,
+				}
+				break
+			}
+		}
+	}
+
+	return &ManyNotificationForMeReport{notifList}, nil
+}*/
 
 // RegisterForNotifications allows a client to register for push notifications.
 // The token is a firebase messaging token.
